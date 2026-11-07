@@ -17,6 +17,8 @@ import type {
   MethodUpdateData,
   OffsetPaginationDisplayInvoice,
   OptionalUpdateInvoice,
+  PaymentTransaction,
+  PaymentTransactionRequest,
   RefundData,
   SubmitRefundData,
 } from "../../../schemas/generated"
@@ -891,6 +893,18 @@ export const getInvoicesUpdateInvoiceResponseMock = (
   ...overrideResponse,
 })
 
+export const getInvoicesCreatePaymentTransactionResponseMock = (
+  overrideResponse: Partial<Extract<PaymentTransaction, object>> = {},
+): PaymentTransaction => ({
+  transaction: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  decimals: faker.number.int(),
+  amount: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  balance: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  fee: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  native_balance: faker.string.alpha({ length: { min: 10, max: 20 } }),
+  ...overrideResponse,
+})
+
 export const getInvoicesRefundInvoiceResponseMock = (
   overrideResponse: Partial<Extract<DisplayRefund, object>> = {},
 ): DisplayRefund => ({
@@ -1263,6 +1277,32 @@ export const getInvoicesUpdatePaymentDetailsMockHandler = (
   )
 }
 
+export const getInvoicesCreatePaymentTransactionMockHandler = (
+  overrideResponse?:
+    | PaymentTransaction
+    | ((
+        info: Parameters<HttpResponseResolver<{ modelId: string }, PaymentTransactionRequest>>[0],
+      ) => Promise<PaymentTransaction> | PaymentTransaction),
+  options?: RequestHandlerOptions,
+) => {
+  return http.post<{ modelId: string }, PaymentTransactionRequest>(
+    "*/invoices/:modelId/payment_transaction",
+    async (
+      info: Parameters<HttpResponseResolver<{ modelId: string }, PaymentTransactionRequest>>[0],
+    ) => {
+      return HttpResponse.json(
+        overrideResponse !== undefined
+          ? typeof overrideResponse === "function"
+            ? await overrideResponse(info)
+            : overrideResponse
+          : getInvoicesCreatePaymentTransactionResponseMock(),
+        { status: 200 },
+      )
+    },
+    options,
+  )
+}
+
 export const getInvoicesRefundInvoiceMockHandler = (
   overrideResponse?:
     | DisplayRefund
@@ -1346,6 +1386,7 @@ export const getInvoicesMock = () => [
   getInvoicesGetOrCreateInvoiceByOrderIdMockHandler(),
   getInvoicesUpdateInvoiceMockHandler(),
   getInvoicesUpdatePaymentDetailsMockHandler(),
+  getInvoicesCreatePaymentTransactionMockHandler(),
   getInvoicesRefundInvoiceMockHandler(),
   getInvoicesGetRefundMockHandler(),
   getInvoicesSubmitRefundMockHandler(),

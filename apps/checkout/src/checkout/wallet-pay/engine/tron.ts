@@ -129,6 +129,8 @@ export const connectTronWallet = async (
   provider: TronProvider,
   network: WalletNetwork,
 ): Promise<WalletSession> => {
+  const chainId = Number(network.reference)
+
   const getTronWeb = async () => {
     const tronWeb = await waitFor(provider.getTronWeb)
 
@@ -150,19 +152,19 @@ export const connectTronWallet = async (
       account,
 
       ensureNetwork: guard(async () => {
-        if ((await readChainId(await getTronWeb())) !== network.chainId) {
+        if ((await readChainId(await getTronWeb())) !== chainId) {
           if (provider.protocol === "tip1193" && provider.request) {
             try {
               await provider.request({
                 method: "wallet_switchEthereumChain",
-                params: [{ chainId: `0x${network.chainId.toString(16)}` }],
+                params: [{ chainId: `0x${chainId.toString(16)}` }],
               })
             } catch {
               throw new WalletPayError({ kind: "wrongNetwork" })
             }
           }
 
-          if ((await readChainId(await getTronWeb())) !== network.chainId) {
+          if ((await readChainId(await getTronWeb())) !== chainId) {
             throw new WalletPayError({ kind: "wrongNetwork" })
           }
         }

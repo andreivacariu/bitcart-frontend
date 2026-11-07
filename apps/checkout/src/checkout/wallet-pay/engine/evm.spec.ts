@@ -11,11 +11,13 @@ import {
 import { WalletPayError, type WalletPayFailure, type WalletTransfer } from "../types"
 import { connectEvmWallet } from "./evm"
 
-const ETHEREUM = { family: "eip155", chainId: 1 } as const
+const ETHEREUM = { family: "eip155", reference: "1" } as const
 const MERCHANT = "0x5a3b9c2d7e1f4a6b8c0d2e4f6a8b0c2d4e6f8a0b"
 const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 
 const ETH_TRANSFER: WalletTransfer = {
+  invoiceId: "invoice",
+  methodId: "method-eth",
   network: ETHEREUM,
   to: MERCHANT,
   amount: "0.5",

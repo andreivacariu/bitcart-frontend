@@ -194,6 +194,12 @@ catalogs:
     '@plausible-analytics/tracker':
       specifier: 0.4.7
       version: 0.4.7
+    '@solana/codecs-strings':
+      specifier: 8.6.0
+      version: 8.6.0
+    '@solana/wallet-standard-features':
+      specifier: 1.5.0
+      version: 1.5.0
     '@t3-oss/env-core':
       specifier: 0.13.11
       version: 0.13.11
@@ -230,6 +236,15 @@ catalogs:
     '@tanstack/store':
       specifier: 0.11.2
       version: 0.11.2
+    '@wallet-standard/app':
+      specifier: 1.1.1
+      version: 1.1.1
+    '@wallet-standard/base':
+      specifier: 1.1.1
+      version: 1.1.1
+    '@wallet-standard/features':
+      specifier: 1.1.1
+      version: 1.1.1
     '@web3icons/react':
       specifier: 4.1.24
       version: 4.1.24
@@ -697,6 +712,12 @@ importers:
       '@lingui/react':
         specifier: catalog:dependencies
         version: 6.10.1(@babel/core@7.29.7(supports-color@7.2.0))(react@19.3.1)
+      '@solana/codecs-strings':
+        specifier: catalog:dependencies
+        version: 8.6.0(typescript@7.0.2)
+      '@solana/wallet-standard-features':
+        specifier: catalog:dependencies
+        version: 1.5.0
       '@t3-oss/env-core':
         specifier: catalog:dependencies
         version: 0.13.11(typescript@7.0.2)(valibot@1.5.0(typescript@7.0.2))(zod@4.6.7)
@@ -727,6 +748,15 @@ importers:
       '@tanstack/store':
         specifier: catalog:dependencies
         version: 0.11.2
+      '@wallet-standard/app':
+        specifier: catalog:dependencies
+        version: 1.1.1
+      '@wallet-standard/base':
+        specifier: catalog:dependencies
+        version: 1.1.1
+      '@wallet-standard/features':
+        specifier: catalog:dependencies
+        version: 1.1.1
       canvas-confetti:
         specifier: catalog:dependencies
         version: 1.9.4
@@ -4743,6 +4773,50 @@ packages:
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
 
+  '@solana/codecs-core@8.6.0':
+    resolution: {integrity: sha512-1N2XZ1yCJGmdTE3g5Fh6/UOE6y46qing+7CZpxfrgB4Q+1l+R/d0z4G15IpQUNl3vzqML8CFF791f/A1XSVmJA==}
+    engines: {node: '>=20.18.0'}
+    peerDependencies:
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  '@solana/codecs-numbers@8.6.0':
+    resolution: {integrity: sha512-GRIArvWJiYxH5w1RMKn7IOCLy0uYB/WRT2kFW/uyXHzL1VNFyud2BIzG0D3iM+AxTd85SdS/x93aV7NEw0mTOQ==}
+    engines: {node: '>=20.18.0'}
+    peerDependencies:
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  '@solana/codecs-strings@8.6.0':
+    resolution: {integrity: sha512-bLS/o5NdCRb9xj23zLACPjxYvDhdjvSDH4XoBAmQ1CPn3cDvVqVvAz0T41Bs/LMykhamkmpqTcWLoTOVqjTz3w==}
+    engines: {node: '>=20.18.0'}
+    peerDependencies:
+      fastestsmallesttextencoderdecoder: ^1.0.22
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      fastestsmallesttextencoderdecoder:
+        optional: true
+      typescript:
+        optional: true
+
+  '@solana/errors@8.6.0':
+    resolution: {integrity: sha512-viHL51ymR1HZB7ZTp0ESkLOyHCa4bPfok9dvRYbMmYokY5ys1xinISKHUhcOHsg9zbuAWBRJUOnZRWAPbb4+yA==}
+    engines: {node: '>=20.18.0'}
+    hasBin: true
+    peerDependencies:
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  '@solana/wallet-standard-features@1.5.0':
+    resolution: {integrity: sha512-gxlLaEfPAqbhd3LNkK0Ks2pbVvDm1SDGqBK/ynDQy13Gu+qiURLpRCfSPjbtrw5bmqQsZ6rS2YJHL31bY/Koag==}
+    engines: {node: '>=22'}
+
   '@solid-primitives/event-listener@2.4.6':
     resolution: {integrity: sha512-5I0YJcTVYIWoMmgBSROBZGcz+ymhew/pGTg2dHW74BUjFKsV8Li4bOZYl0YAGP4mHw5o4UBd9/BEesqBci3wxw==}
     peerDependencies:
@@ -5885,6 +5959,18 @@ packages:
 
   '@viz-js/viz@3.31.0':
     resolution: {integrity: sha512-r7zlQdRvcwvIpjHGgs+KNWHeE/P5/Dq7k8ZAKaMCbZqomxCBJV78gVuQYaHzFVca+kB0mX0fMW9UFevCOBG50A==}
+
+  '@wallet-standard/app@1.1.1':
+    resolution: {integrity: sha512-WDGwoByhP5gwHH01r5EaLgQdLVkACPCdOMQhmhn8rsm10h/siSgTorShzBxrn0ExSPof+Lu+C3TfgqBrPa1xoQ==}
+    engines: {node: '>=22'}
+
+  '@wallet-standard/base@1.1.1':
+    resolution: {integrity: sha512-gggIHTtxicF9XFMQ12DkfS6NAG92Ak795JeSA7f2whAQ6Y3AkMWWuCMxSZXG2NIPN42kEaZSNVjqMsJRaJRxMQ==}
+    engines: {node: '>=22'}
+
+  '@wallet-standard/features@1.1.1':
+    resolution: {integrity: sha512-aCWYmVeSCGViyEU5k7GMoW8zxE4Gs+C1s1Pp2XLesvSNlnZ4PMES9HUnTB3hl0b3RVj7C61yze3IWyrncqg4MA==}
+    engines: {node: '>=22'}
 
   '@web3icons/common@0.11.53':
     resolution: {integrity: sha512-bNUB/Lfh9C+6T1juicWARU+oW27scRj7Xw/TkzCXlZBrJICEc/qTcIUStGpCjDq3jQuRfO6JHCbTIiiEPZAzBg==}
@@ -11198,6 +11284,39 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
+  '@solana/codecs-core@8.6.0(typescript@7.0.2)':
+    dependencies:
+      '@solana/errors': 8.6.0(typescript@7.0.2)
+    optionalDependencies:
+      typescript: 7.0.2
+
+  '@solana/codecs-numbers@8.6.0(typescript@7.0.2)':
+    dependencies:
+      '@solana/codecs-core': 8.6.0(typescript@7.0.2)
+      '@solana/errors': 8.6.0(typescript@7.0.2)
+    optionalDependencies:
+      typescript: 7.0.2
+
+  '@solana/codecs-strings@8.6.0(typescript@7.0.2)':
+    dependencies:
+      '@solana/codecs-core': 8.6.0(typescript@7.0.2)
+      '@solana/codecs-numbers': 8.6.0(typescript@7.0.2)
+      '@solana/errors': 8.6.0(typescript@7.0.2)
+    optionalDependencies:
+      typescript: 7.0.2
+
+  '@solana/errors@8.6.0(typescript@7.0.2)':
+    dependencies:
+      chalk: 5.6.2
+      commander: 15.0.0
+    optionalDependencies:
+      typescript: 7.0.2
+
+  '@solana/wallet-standard-features@1.5.0':
+    dependencies:
+      '@wallet-standard/base': 1.1.1
+      '@wallet-standard/features': 1.1.1
+
   '@solid-primitives/event-listener@2.4.6(solid-js@1.9.17)':
     dependencies:
       '@solid-primitives/utils': 6.4.1(solid-js@1.9.17)
@@ -12349,6 +12468,16 @@ snapshots:
   '@vitest/spy@5.0.5': {}
 
   '@viz-js/viz@3.31.0': {}
+
+  '@wallet-standard/app@1.1.1':
+    dependencies:
+      '@wallet-standard/base': 1.1.1
+
+  '@wallet-standard/base@1.1.1': {}
+
+  '@wallet-standard/features@1.1.1':
+    dependencies:
+      '@wallet-standard/base': 1.1.1
 
   '@web3icons/common@0.11.53': {}
 

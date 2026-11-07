@@ -1,3 +1,11 @@
+import {
+  SolanaSignAndSendTransaction,
+  type SolanaSignAndSendTransactionFeature,
+  type SolanaSignAndSendTransactionInput,
+} from "@solana/wallet-standard-features"
+import type { IdentifierString, Wallet, WalletAccount } from "@wallet-standard/base"
+import { StandardConnect, type StandardConnectFeature } from "@wallet-standard/features"
+
 import type {
   Eip1193Provider,
   Eip1193Request,
@@ -7,7 +15,18 @@ import type {
 
 export const FAKE_EVM_ACCOUNT = "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
 export const FAKE_TRON_ACCOUNT = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8"
+export const FAKE_SOLANA_ACCOUNT = "EWmDvi3hhz86LYi2NcD6YUp18DeeB5gDkwJzde3MgF9A"
 export const FAKE_TX_HASH = `0x${"ab".repeat(32)}`
+
+//* The bytes 1 to 64, as the signature a Solana wallet returns.
+export const FAKE_SOLANA_SIGNATURE = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+
+//* That signature in base58: the transaction hash.
+export const FAKE_SOLANA_TX_HASH =
+  "2Ana1pUpv2ZbMVkwF5FXapYeBEjdxDatLn7nvJkhgTSXbs59SyZSx866bXirPgj8QQVB57uxHJBG1YFvkRbFj4T"
+
+//* The bytes 1 to 5, standing in for a serialized transaction.
+export const FAKE_SOLANA_TRANSACTION = "AQIDBAU="
 
 const PLENTY = 10n ** 30n
 
@@ -216,4 +235,81 @@ export const createFakeTronProvider = ({
   }
 
   return { provider, tronWeb, sent, getChainId: () => chainId }
+}
+
+export type FakeSolanaOptions = {
+  chains?: IdentifierString[]
+  accountChains?: IdentifierString[]
+  connect?: Outcome | "locked"
+
+  //* `declined` and `deviceLocked` throw like a Wallet Standard adapter: a
+  //* `WalletSignTransactionError` keeping the message of the error behind it, without a code.
+  send?: Outcome | keyof typeof ADAPTER_MESSAGES
+}
+
+export const FAKE_LOCKED_DEVICE_MESSAGE = "Ledger device: Locked device (0x5515)"
+
+const ADAPTER_MESSAGES = {
+  declined: "User rejected the request.",
+  deviceLocked: FAKE_LOCKED_DEVICE_MESSAGE,
+}
+
+export const createFakeSolanaWallet = ({
+  chains = ["solana:mainnet", "solana:devnet"],
+  accountChains = chains,
+  connect = "accept",
+  send = "accept",
+}: FakeSolanaOptions = {}) => {
+  const sent: SolanaSignAndSendTransactionInput[] = []
+
+  const account: WalletAccount = {
+    address: FAKE_SOLANA_ACCOUNT,
+    publicKey: Uint8Array.from({ length: 32 }, (_, index) => 200 - index),
+    chains: accountChains,
+    features: [SolanaSignAndSendTransaction],
+  }
+
+  const features: StandardConnectFeature & SolanaSignAndSendTransactionFeature = {
+    [StandardConnect]: {
+      version: "1.0.0",
+
+      connect: () => {
+        if (connect === "accept") {
+          return Promise.resolve({ accounts: [account] })
+        } else if (connect === "locked") {
+          return Promise.resolve({ accounts: [] })
+        } else return fail(connect)
+      },
+    },
+
+    [SolanaSignAndSendTransaction]: {
+      version: "1.0.0",
+      supportedTransactionVersions: ["legacy", 0],
+
+      signAndSendTransaction: (...inputs) => {
+        sent.push(...inputs)
+
+        if (send === "accept") {
+          return Promise.resolve([{ signature: FAKE_SOLANA_SIGNATURE }])
+        } else if (send === "declined" || send === "deviceLocked") {
+          return Promise.reject(
+            Object.assign(new Error(ADAPTER_MESSAGES[send]), {
+              name: "WalletSignTransactionError",
+            }),
+          )
+        } else return fail(send)
+      },
+    },
+  }
+
+  const wallet: Wallet = {
+    version: "1.0.0",
+    name: "Test Solana Wallet",
+    icon: "data:image/svg+xml;base64,PHN2Zy8+",
+    chains,
+    features,
+    accounts: [],
+  }
+
+  return { wallet, account, sent }
 }

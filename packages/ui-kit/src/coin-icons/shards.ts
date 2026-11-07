@@ -7,9 +7,11 @@ export const getSymbolShard = (symbol: string): string => {
   return /^[A-Z0-9]$/u.test(first) ? first : "_"
 }
 
-//* An EVM address's first hex digit after `0x`. TRON's few indexed tokens share one shard.
+//* An EVM address's first hex digit after `0x`. TRON's few indexed tokens share one shard. Other
+//* (base58) addresses shard by their first character case-folded, so no two shard files differ
+//* only in case on a case-insensitive file system.
 export const getAddressShard = (address: string): string =>
-  address.startsWith("0x") ? address.charAt(2).toLowerCase() : address.charAt(0)
+  address.startsWith("0x") ? address.charAt(2).toLowerCase() : address.charAt(0).toUpperCase()
 
 export const normalizeTokenAddress = (network: string, address: string): string =>
   network.startsWith("eip155:") ? address.toLowerCase() : address

@@ -48,7 +48,7 @@ const NO_WALLETS: InjectedWallet[] = []
 export const useInjectedWallets = (network: WalletNetwork | null): InjectedWallet[] =>
   useSelector(
     useWalletPay().discovery,
-    (state) => (network ? selectInjectedWallets(state, network.family) : NO_WALLETS),
+    (state) => (network ? selectInjectedWallets(state, network) : NO_WALLETS),
     { compare: shallow },
   )
 
@@ -73,6 +73,8 @@ export const useWalletPayTarget = (): WalletPayTarget | null => {
           senderAddress: payment.senderAddress,
 
           transfer: {
+            invoiceId: model.invoice.id,
+            methodId: payment.id,
             network,
             to: payment.address,
             amount: payment.amount,

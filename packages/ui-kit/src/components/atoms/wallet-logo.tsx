@@ -10,6 +10,8 @@ const WALLET_LOGO_LOADERS: Partial<
   Record<string, () => Promise<{ default: WalletLogoComponent }>>
 > = {
   metamask: () => import("@web3icons/react/icons/wallets/WalletMetamask"),
+  phantom: () => import("@web3icons/react/icons/wallets/WalletPhantom"),
+  solflare: () => import("@web3icons/react/icons/wallets/WalletSolflare"),
   trust: () => import("@web3icons/react/icons/wallets/WalletTrust"),
 }
 

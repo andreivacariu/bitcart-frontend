@@ -21,15 +21,9 @@ import {
   type WalletTransfer,
 } from "../types"
 import { guard } from "./failures"
+import { formatFee } from "./fees"
 
 const NATIVE_DECIMALS = 18
-const FEE_DIGITS = 2
-
-const roundUpSignificant = (units: bigint, digits: number): bigint => {
-  const factor = 10n ** BigInt(Math.max(0, units.toString().length - digits))
-
-  return ((units + factor - 1n) / factor) * factor
-}
 
 type EvmClient = ReturnType<typeof createEvmClient>
 
@@ -105,14 +99,16 @@ const checkFunds = async (client: EvmClient, account: Address, transfer: WalletT
     if (nativeBalance < nativeSpent + fee) {
       throw new WalletPayError({
         kind: "insufficientFee",
-        fee: trimTrailingZeros(fromBaseUnits(roundUpSignificant(fee, FEE_DIGITS), NATIVE_DECIMALS)),
+        fee: formatFee(fee, NATIVE_DECIMALS),
         feeSymbol: getNativeSymbol(transfer.network),
       })
     }
   }
 }
 
-const ensureNetwork = async (client: EvmClient, { chainId }: WalletNetwork) => {
+const ensureNetwork = async (client: EvmClient, { reference }: WalletNetwork) => {
+  const chainId = Number(reference)
+
   if ((await getChainId(client)) !== chainId) {
     try {
       await switchChain(client, { id: chainId })

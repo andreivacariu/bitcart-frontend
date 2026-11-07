@@ -1,6 +1,10 @@
+import { SolanaSignAndSendTransaction } from "@solana/wallet-standard-features"
 import { createStore } from "@tanstack/store"
+import { getWallets } from "@wallet-standard/app"
+import type { Wallet } from "@wallet-standard/base"
+import { StandardConnect } from "@wallet-standard/features"
 
-import type { WalletFamily } from "../networks"
+import { getSolanaChain, SOLANA_CHAINS, type WalletFamily, type WalletNetwork } from "../networks"
 import type { Eip1193Request, InjectedTronWeb, InjectedWallet, TronProvider } from "./types"
 
 export type WalletDiscoveryState = {
@@ -10,6 +14,7 @@ export type WalletDiscoveryState = {
 
 export type WalletDiscoveryActions = {
   announce: (wallet: InjectedWallet) => void
+  forget: (provider: object) => void
   detectLegacy: (wallets: InjectedWallet[]) => void
 }
 
@@ -31,6 +36,16 @@ export const createWalletDiscovery = () =>
             }
         }),
 
+      forget: (provider) =>
+        setState((state) =>
+          state.announced.some((wallet) => wallet.provider === provider)
+            ? {
+                ...state,
+                announced: state.announced.filter((wallet) => wallet.provider !== provider),
+              }
+            : state,
+        ),
+
       detectLegacy: (wallets) =>
         setState((state) => {
           const isSame =
@@ -44,13 +59,24 @@ export const createWalletDiscovery = () =>
 
 export type WalletDiscovery = ReturnType<typeof createWalletDiscovery>
 
+//* A Solana wallet is listed only on a cluster it supports: the Wallet Standard can't switch one.
 export const selectInjectedWallets = (
   { announced, legacy }: WalletDiscoveryState,
-  family: WalletFamily,
+  network: WalletNetwork,
 ): InjectedWallet[] => {
-  const ofFamily = announced.filter((wallet) => wallet.family === family)
+  const ofFamily = announced.filter((wallet) => wallet.family === network.family)
 
-  return ofFamily.length > 0 ? ofFamily : legacy.filter((wallet) => wallet.family === family)
+  if (network.family === "solana") {
+    const chain = getSolanaChain(network)
+
+    return ofFamily.filter(
+      (wallet) =>
+        wallet.family === "solana" && chain !== null && wallet.provider.chains.includes(chain),
+    )
+  } else
+    return ofFamily.length > 0
+      ? ofFamily
+      : legacy.filter((wallet) => wallet.family === network.family)
 }
 
 type AnnouncedInfo = { uuid?: unknown; name?: unknown; icon?: unknown }
@@ -67,10 +93,13 @@ const isRequest = (value: unknown): value is Eip1193Request => typeof value === 
 const asTronWeb = (value: unknown): InjectedTronWeb | null =>
   typeof value === "object" && value !== null && "trx" in value ? (value as InjectedTronWeb) : null
 
-const toAnnouncedId = (family: WalletFamily, detail: unknown): string =>
+//* Solana wallets register through the Wallet Standard instead of announcing themselves.
+type AnnouncedFamily = Exclude<WalletFamily, "solana">
+
+const toAnnouncedId = (family: AnnouncedFamily, detail: unknown): string =>
   `${family}:${String((detail as AnnounceDetail | undefined)?.info?.uuid)}`
 
-const toAnnouncedWallet = (family: WalletFamily, detail: unknown): InjectedWallet | null => {
+const toAnnouncedWallet = (family: AnnouncedFamily, detail: unknown): InjectedWallet | null => {
   const { info, provider } = (detail ?? {}) as AnnounceDetail
 
   if (
@@ -203,9 +232,55 @@ export const findLegacyWallets = (globals: InjectedGlobals): InjectedWallet[] =>
 const ANNOUNCE_EVENTS = {
   eip155: { request: "eip6963:requestProvider", announce: "eip6963:announceProvider" },
   tron: { request: "TIP6963:requestProvider", announce: "TIP6963:announceProvider" },
-} as const satisfies Record<WalletFamily, { request: string; announce: string }>
+} as const satisfies Record<AnnouncedFamily, { request: string; announce: string }>
 
 const LEGACY_RECHECK_DELAYS_MS = [500, 2000]
+
+const isStrings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string")
+
+//* A Solana wallet that can connect and pay on a cluster the checkout knows. Extensions register
+//* any object, so a malformed one is ignored instead of breaking the checkout.
+const toStandardWallet = (wallet: Wallet): InjectedWallet | null => {
+  const { name, chains, features, accounts } = wallet as { [Key in keyof Wallet]?: unknown }
+
+  return typeof name === "string" &&
+    isStrings(chains) &&
+    chains.some((chain) => SOLANA_CHAINS.includes(chain)) &&
+    typeof features === "object" &&
+    features !== null &&
+    StandardConnect in features &&
+    SolanaSignAndSendTransaction in features &&
+    Array.isArray(accounts)
+    ? { family: "solana", id: `solana:${name}`, name, icon: toIcon(wallet.icon), provider: wallet }
+    : null
+}
+
+const watchStandardWallets = (discovery: WalletDiscovery): (() => void) => {
+  const wallets = getWallets()
+
+  const register = (...registered: Wallet[]) => {
+    for (const wallet of registered) {
+      const injected = toStandardWallet(wallet)
+
+      if (injected) discovery.actions.announce(injected)
+    }
+  }
+
+  register(...wallets.get())
+
+  const stops = [
+    wallets.on("register", register),
+
+    wallets.on("unregister", (...unregistered) => {
+      for (const wallet of unregistered) discovery.actions.forget(wallet)
+    }),
+  ]
+
+  return () => {
+    for (const stop of stops) stop()
+  }
+}
 
 export const watchInjectedWallets = (
   discovery: WalletDiscovery,
@@ -214,7 +289,7 @@ export const watchInjectedWallets = (
   const globals = target as unknown as InjectedGlobals
   const detectLegacy = () => discovery.actions.detectLegacy(findLegacyWallets(globals))
 
-  const listeners = (Object.keys(ANNOUNCE_EVENTS) as WalletFamily[]).map((family) => {
+  const listeners = (Object.keys(ANNOUNCE_EVENTS) as AnnouncedFamily[]).map((family) => {
     const announced = new WeakMap<object, InjectedWallet>()
 
     const listener = (event: Event) => {
@@ -243,9 +318,11 @@ export const watchInjectedWallets = (
   detectLegacy()
 
   const timers = LEGACY_RECHECK_DELAYS_MS.map((delay) => setTimeout(detectLegacy, delay))
+  const stopStandardWallets = watchStandardWallets(discovery)
 
   return () => {
     for (const stop of listeners) stop()
     for (const timer of timers) clearTimeout(timer)
+    stopStandardWallets()
   }
 }

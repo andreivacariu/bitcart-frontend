@@ -10,7 +10,7 @@ import { createWalletPayControl } from "./control-store"
 import { createWalletPayRunner, type WalletPayTarget } from "./runner"
 import type { InjectedWallet } from "./types"
 
-const ETHEREUM = { family: "eip155", chainId: 1 } as const
+const ETHEREUM = { family: "eip155", reference: "1" } as const
 
 type PaymentTarget = Extract<WalletPayTarget, { phase: "payment" }>
 
@@ -21,6 +21,8 @@ const paymentTarget = (senderAddress: string | null = null): WalletPayTarget => 
   senderAddress,
 
   transfer: {
+    invoiceId: "invoice",
+    methodId: "method-eth",
     network: ETHEREUM,
     to: "0x5a3b9c2d7e1f4a6b8c0d2e4f6a8b0c2d4e6f8a0b",
     amount: "0.5",

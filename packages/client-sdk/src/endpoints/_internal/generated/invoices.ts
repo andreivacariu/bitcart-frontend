@@ -32,6 +32,7 @@ import {
   InvoicesBatchAction200,
   InvoicesGetCount200,
   OffsetPaginationDisplayInvoice,
+  PaymentTransaction,
 } from "../../../schemas/generated"
 import type {
   BatchAction,
@@ -47,6 +48,8 @@ import type {
   MethodUpdateData,
   OffsetPaginationDisplayInvoiceOutput,
   OptionalUpdateInvoice,
+  PaymentTransactionOutput,
+  PaymentTransactionRequest,
   RefundData,
   SubmitRefundData,
 } from "../../../schemas/generated"
@@ -1941,6 +1944,140 @@ export const useInvoicesUpdatePaymentDetails = <
   TContext
 > => {
   return useMutation(getInvoicesUpdatePaymentDetailsMutationOptions(options), queryClient)
+}
+export const getInvoicesCreatePaymentTransactionUrl = (modelId: string) => {
+  return `${BitcartApiConfig.baseUrl}/invoices/${modelId}/payment_transaction`
+}
+
+/**
+ * Build an unsigned transaction paying the invoice from the customer's wallet
+ *
+ * Supported for Solana payment methods. The checkout asks the customer's wallet to sign and send it.
+ * The transaction carries the payment's reference, so the payment is detected without a sender address.
+ * @summary Create Payment Transaction
+ */
+export const invoicesCreatePaymentTransaction = async (
+  modelId: string,
+  paymentTransactionRequest: PaymentTransactionRequest,
+  options?: RequestInit,
+  fetchFn?: typeof globalThis.fetch,
+): Promise<PaymentTransactionOutput> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {}
+    if (h instanceof Headers) return Object.fromEntries(h.entries())
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      )
+    }
+    const headers: Record<string, string | readonly string[]> = {}
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value
+    }
+    return headers
+  }
+  const res = await (fetchFn ?? fetch)(getInvoicesCreatePaymentTransactionUrl(modelId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(paymentTransactionRequest),
+  })
+
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase()
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+  if (!res.ok) throw createApiFailureError(res, body)
+  const parsedBody = body ? (contentType.includes("json") ? JSON.parse(body) : body) : {}
+  const data = contentType.includes("json") ? PaymentTransaction.parse(parsedBody) : parsedBody
+  return data
+}
+
+export const getInvoicesCreatePaymentTransactionMutationKey = () =>
+  ["invoicesCreatePaymentTransaction"] as const
+
+export const getInvoicesCreatePaymentTransactionMutationOptions = <
+  TError = globalThis.Error & { info?: HTTPValidationError; status?: number },
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof invoicesCreatePaymentTransaction>>,
+    TError,
+    InvoicesCreatePaymentTransactionMutationVariables,
+    TContext
+  >
+  fetch?: RequestInit
+  fetcher?: typeof globalThis.fetch
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof invoicesCreatePaymentTransaction>>,
+  TError,
+  InvoicesCreatePaymentTransactionMutationVariables,
+  TContext
+> => {
+  const mutationKey = getInvoicesCreatePaymentTransactionMutationKey()
+  const {
+    mutation: mutationOptions,
+    fetch: fetchOptions,
+    fetcher: fetcherFn,
+  } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof invoicesCreatePaymentTransaction>>,
+    InvoicesCreatePaymentTransactionMutationVariables
+  > = (props) => {
+    const { modelId, data } = props ?? {}
+
+    return invoicesCreatePaymentTransaction(modelId, data, fetchOptions, fetcherFn)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type InvoicesCreatePaymentTransactionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof invoicesCreatePaymentTransaction>>
+>
+export type InvoicesCreatePaymentTransactionMutationBody = PaymentTransactionRequest
+export type InvoicesCreatePaymentTransactionMutationError = globalThis.Error & {
+  info?: HTTPValidationError
+  status?: number
+}
+export type InvoicesCreatePaymentTransactionMutationVariables = {
+  modelId: string
+  data: PaymentTransactionRequest
+}
+
+/**
+ * @summary Create Payment Transaction
+ */
+export const useInvoicesCreatePaymentTransaction = <
+  TError = globalThis.Error & { info?: HTTPValidationError; status?: number },
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof invoicesCreatePaymentTransaction>>,
+      TError,
+      InvoicesCreatePaymentTransactionMutationVariables,
+      TContext
+    >
+    fetch?: RequestInit
+    fetcher?: typeof globalThis.fetch
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof invoicesCreatePaymentTransaction>>,
+  TError,
+  InvoicesCreatePaymentTransactionMutationVariables,
+  TContext
+> => {
+  return useMutation(getInvoicesCreatePaymentTransactionMutationOptions(options), queryClient)
 }
 export const getInvoicesRefundInvoiceUrl = (modelId: string) => {
   return `${BitcartApiConfig.baseUrl}/invoices/${modelId}/refunds`

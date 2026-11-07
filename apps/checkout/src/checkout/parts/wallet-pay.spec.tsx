@@ -1,14 +1,20 @@
 import { CHECKOUT_WALLET_SENT_TESTID } from "@bitcart/qa"
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { getWallets } from "@wallet-standard/app"
 import { beforeAll, describe, expect, onTestFinished, test, vi } from "vitest"
 
 import { makeInvoice, makePayment, makePolicies } from "../fixtures"
 import type { CheckoutSource } from "../model"
+import { servePaymentTransaction, setupCheckoutApiServer } from "../testing/api-server"
 import {
   createFakeEvmProvider,
+  createFakeSolanaWallet,
   FAKE_EVM_ACCOUNT,
+  FAKE_SOLANA_ACCOUNT,
+  FAKE_SOLANA_TX_HASH,
   FAKE_TX_HASH,
   type FakeEvmOptions,
+  type FakeSolanaOptions,
 } from "../testing/fake-wallets"
 import { renderCheckout } from "../testing/render-checkout"
 import { WalletButton } from "./wallet-button"
@@ -308,6 +314,133 @@ describe("wallet pay", () => {
       expect(screen.getByRole("textbox", { name: /Your ETH address/u })).toBeVisible()
       expect(screen.queryByRole("button", { name: "Pay with wallet" })).not.toBeInTheDocument()
       expect(screen.queryByText("or")).not.toBeInTheDocument()
+    })
+  })
+
+  describe("with a Solana wallet", () => {
+    setupCheckoutApiServer()
+
+    const SOL_MERCHANT = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+    const SOL_URI = `solana:${SOL_MERCHANT}?amount=0.5&reference=82ZJ7nbGpixjeDCmEhUcmwXYfvurzAgGdtSMuHnUgyny`
+
+    const injectSolanaWallet = (options: FakeSolanaOptions = {}) => {
+      const fake = createFakeSolanaWallet(options)
+
+      onTestFinished(getWallets().register(fake.wallet))
+
+      return fake
+    }
+
+    const renderSolanaPay = () =>
+      renderWalletPay({
+        invoice: makeInvoice({
+          payments: [
+            makePayment({
+              id: "method-sol",
+              symbol: "sol",
+              currency: "sol",
+              name: "SOL",
+              divisibility: 9,
+              amount: "0.5",
+              payment_address: SOL_MERCHANT,
+              payment_url: SOL_URI,
+
+              wallet: {
+                network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+                sender_address_required: false,
+                links: [],
+              },
+            }),
+          ],
+        }),
+
+        policies: makePolicies({ explorer_urls: { sol: "https://explorer.example.com/tx/{}" } }),
+      })
+
+    const payWithSolanaWallet = () =>
+      fireEvent.click(within(openSheet()).getByRole("button", { name: /Test Solana Wallet/u }))
+
+    test("pays with the transaction the API builds, then shows the payment as sent", async () => {
+      const requests = servePaymentTransaction()
+      const wallet = injectSolanaWallet()
+
+      renderSolanaPay()
+      payWithSolanaWallet()
+
+      expect(await screen.findByTestId(CHECKOUT_WALLET_SENT_TESTID)).toHaveTextContent(
+        "Payment sent",
+      )
+
+      expect(screen.getByRole("link", { name: "View transaction" })).toHaveAttribute(
+        "href",
+        `https://explorer.example.com/tx/${FAKE_SOLANA_TX_HASH}`,
+      )
+
+      expect(requests.map(({ body }) => body)).toStrictEqual([
+        { id: "method-sol", account: FAKE_SOLANA_ACCOUNT },
+        { id: "method-sol", account: FAKE_SOLANA_ACCOUNT },
+      ])
+
+      expect(wallet.sent).toHaveLength(1)
+    })
+
+    test("asks for SOL to cover the network fee", async () => {
+      servePaymentTransaction({
+        amount: "500000000",
+        balance: "500000000",
+        native_balance: "500000000",
+        fee: "5000",
+      })
+
+      injectSolanaWallet()
+      renderSolanaPay()
+      payWithSolanaWallet()
+
+      expect(await screen.findByText("Not enough SOL for the network fee")).toBeVisible()
+      expect(screen.getByText("The network fee is about 0.000005 SOL.")).toBeVisible()
+    })
+
+    test("doesn't list a wallet without the invoice's cluster", () => {
+      injectSolanaWallet({ chains: ["solana:devnet"] })
+      renderSolanaPay()
+
+      expect(
+        within(openSheet()).queryByRole("button", { name: /Test Solana Wallet/u }),
+      ).not.toBeInTheDocument()
+    })
+
+    test("says an account without the invoice's cluster can't pay, without asking to switch", async () => {
+      injectSolanaWallet({ accountChains: ["solana:devnet"] })
+      renderSolanaPay()
+      payWithSolanaWallet()
+
+      expect(await screen.findByText("Test Solana Wallet can't pay on Solana")).toBeVisible()
+      expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Other ways to pay" })).toBeVisible()
+    })
+
+    test("blames the store, not the wallet, when the API won't build the transaction", async () => {
+      servePaymentTransaction({ status: 422, detail: "Payment method can't be paid anymore" })
+
+      injectSolanaWallet()
+      renderSolanaPay()
+      payWithSolanaWallet()
+
+      expect(await screen.findByText("The store couldn't prepare this payment")).toBeVisible()
+      expect(screen.getByText("Payment method can't be paid anymore")).toBeVisible()
+      expect(screen.queryByText(/returned an error/u)).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled()
+    })
+
+    test("blames the store when it can't be reached", async () => {
+      servePaymentTransaction("networkError")
+
+      injectSolanaWallet()
+      renderSolanaPay()
+      payWithSolanaWallet()
+
+      expect(await screen.findByText("The store couldn't prepare this payment")).toBeVisible()
+      expect(screen.queryByText(/returned an error/u)).not.toBeInTheDocument()
     })
   })
 })

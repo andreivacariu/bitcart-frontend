@@ -1,5 +1,9 @@
+import { SolanaSignAndSendTransaction } from "@solana/wallet-standard-features"
+import { getWallets } from "@wallet-standard/app"
+import type { Wallet } from "@wallet-standard/base"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
+import { createFakeSolanaWallet, type FakeSolanaOptions } from "../testing/fake-wallets"
 import {
   createWalletDiscovery,
   findLegacyWallets,
@@ -8,6 +12,10 @@ import {
 } from "./discovery"
 
 const ICON = "data:image/svg+xml,%3Csvg%2F%3E"
+
+const ETHEREUM = { family: "eip155", reference: "1" } as const
+const TRON = { family: "tron", reference: "728126428" } as const
+const SOLANA = { family: "solana", reference: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" } as const
 
 const announcer = (event: "eip6963" | "TIP6963", uuid: string, info: object = {}) => {
   const provider = { request: vi.fn(() => Promise.resolve([])), tronWeb: false }
@@ -43,6 +51,16 @@ const watch = () => {
   return discovery
 }
 
+const register = (wallet: Wallet) => {
+  const unregister = getWallets().register(wallet)
+
+  stops.push(unregister)
+
+  return unregister
+}
+
+const solanaWallet = (options: FakeSolanaOptions = {}) => createFakeSolanaWallet(options).wallet
+
 describe("watchInjectedWallets", () => {
   test("asks wallets of both standards to announce themselves", () => {
     announcer("eip6963", "evm-wallet")
@@ -50,11 +68,11 @@ describe("watchInjectedWallets", () => {
 
     const { state } = watch()
 
-    expect(selectInjectedWallets(state, "eip155").map(({ id }) => id)).toStrictEqual([
+    expect(selectInjectedWallets(state, ETHEREUM).map(({ id }) => id)).toStrictEqual([
       "eip155:evm-wallet",
     ])
 
-    expect(selectInjectedWallets(state, "tron").map(({ id }) => id)).toStrictEqual([
+    expect(selectInjectedWallets(state, TRON).map(({ id }) => id)).toStrictEqual([
       "tron:tron-wallet",
     ])
   })
@@ -74,7 +92,7 @@ describe("watchInjectedWallets", () => {
 
     announce()
 
-    expect(selectInjectedWallets(discovery.state, "eip155")).toHaveLength(1)
+    expect(selectInjectedWallets(discovery.state, ETHEREUM)).toHaveLength(1)
   })
 
   test("keeps one entry for a wallet that announces itself again", () => {
@@ -121,19 +139,130 @@ describe("watchInjectedWallets", () => {
   })
 })
 
+describe("Solana wallets", () => {
+  test("lists a Wallet Standard wallet registered before the checkout, with its name and icon", () => {
+    const wallet = solanaWallet()
+
+    register(wallet)
+
+    expect(selectInjectedWallets(watch().state, SOLANA)).toStrictEqual([
+      {
+        family: "solana",
+        id: "solana:Test Solana Wallet",
+        name: "Test Solana Wallet",
+        icon: wallet.icon,
+        provider: wallet,
+      },
+    ])
+  })
+
+  test("picks up a wallet registering itself once the checkout is ready", () => {
+    const discovery = watch()
+    const wallet = solanaWallet()
+
+    window.dispatchEvent(
+      new CustomEvent("wallet-standard:register-wallet", {
+        detail: ({ register: registerWallet }: { register: (wallet: Wallet) => () => void }) =>
+          stops.push(registerWallet(wallet)),
+      }),
+    )
+
+    expect(
+      selectInjectedWallets(discovery.state, SOLANA).map(({ provider }) => provider),
+    ).toStrictEqual([wallet])
+  })
+
+  test("drops a wallet that unregisters itself", () => {
+    const discovery = watch()
+    const unregister = register(solanaWallet())
+
+    unregister()
+
+    expect(selectInjectedWallets(discovery.state, SOLANA)).toStrictEqual([])
+  })
+
+  test("keeps Solana wallets apart from the other families", () => {
+    register(solanaWallet())
+
+    const { state } = watch()
+
+    expect(selectInjectedWallets(state, ETHEREUM)).toStrictEqual([])
+    expect(selectInjectedWallets(state, TRON)).toStrictEqual([])
+  })
+
+  test("ignores a wallet that can't send a transaction", () => {
+    const { features, ...wallet } = solanaWallet()
+    const { [SolanaSignAndSendTransaction]: _send, ...connectOnly } = features
+
+    register({ ...wallet, features: connectOnly })
+
+    expect(watch().state.announced).toStrictEqual([])
+  })
+
+  test("ignores a wallet of another chain", () => {
+    register(solanaWallet({ chains: ["sui:mainnet"] }))
+
+    expect(watch().state.announced).toStrictEqual([])
+  })
+
+  test("ignores a malformed wallet next to a valid one", () => {
+    const valid = solanaWallet()
+
+    register({
+      ...valid,
+      name: "Malformed",
+      chains: undefined,
+      features: null,
+    } as unknown as Wallet)
+
+    register(valid)
+
+    expect(watch().state.announced.map(({ provider }) => provider)).toStrictEqual([valid])
+  })
+
+  test("stops listening once stopped", () => {
+    const discovery = createWalletDiscovery()
+
+    watchInjectedWallets(discovery)()
+    register(solanaWallet())
+
+    expect(discovery.state.announced).toStrictEqual([])
+  })
+})
+
 describe("selectInjectedWallets", () => {
   test("offers a global wallet only while nothing of its family announces itself", () => {
     vi.stubGlobal("ethereum", { request: vi.fn() })
 
     const discovery = watch()
 
-    expect(selectInjectedWallets(discovery.state, "eip155")[0]?.id).toBe("legacy:ethereum")
+    expect(selectInjectedWallets(discovery.state, ETHEREUM)[0]?.id).toBe("legacy:ethereum")
 
     announcer("eip6963", "announced").announce()
 
-    expect(selectInjectedWallets(discovery.state, "eip155").map(({ id }) => id)).toStrictEqual([
+    expect(selectInjectedWallets(discovery.state, ETHEREUM).map(({ id }) => id)).toStrictEqual([
       "eip155:announced",
     ])
+  })
+
+  test("lists a Solana wallet only on a cluster it supports", () => {
+    register(solanaWallet({ chains: ["solana:devnet"] }))
+
+    const { state } = watch()
+
+    expect(selectInjectedWallets(state, SOLANA)).toStrictEqual([])
+
+    expect(
+      selectInjectedWallets(state, { ...SOLANA, reference: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1" }),
+    ).toHaveLength(1)
+  })
+
+  test("lists no Solana wallet on a cluster the checkout doesn't know", () => {
+    register(solanaWallet())
+
+    expect(
+      selectInjectedWallets(watch().state, { ...SOLANA, reference: "1".repeat(32) }),
+    ).toStrictEqual([])
   })
 })
 

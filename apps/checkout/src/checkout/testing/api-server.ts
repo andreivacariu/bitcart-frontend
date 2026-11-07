@@ -8,11 +8,13 @@ import {
   getManageGetPoliciesResponseMock,
   getStoresGetItemMockHandler,
 } from "@bitcart/client-sdk/mocks"
+import type { PaymentTransaction, PaymentTransactionRequest } from "@bitcart/client-sdk/schemas"
 import { http, HttpResponse, ws, type WebSocketHandlerConnection } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll } from "vitest"
 
 import { makeRefund, makeStore } from "../fixtures"
+import { FAKE_SOLANA_TRANSACTION } from "./fake-wallets"
 
 //! Not part of `#/checkout/testing`: templates never talk to the API, so only core and app tests
 //! import this module.
@@ -116,4 +118,51 @@ export const serveCheckoutApi = (initialInvoice: bitcartInvoices.Invoice) => {
   )
 
   return api
+}
+
+type PaymentTransactionRecord = { invoiceId: string; body: PaymentTransactionRequest }
+
+type PaymentTransactionAnswer =
+  | Partial<PaymentTransaction>
+  | { status: number; detail: string }
+  | "networkError"
+
+/**
+ * Serves the transactions the API builds for a Solana wallet, with the given payer balances, fails
+ * them with the given `detail`, or drops the connection. Given a list, the n-th request gets the
+ * n-th answer and later ones the last. The returned array records every request.
+ */
+export const servePaymentTransaction = (
+  answers: PaymentTransactionAnswer | PaymentTransactionAnswer[] = {},
+) => {
+  const requests: PaymentTransactionRecord[] = []
+  const list = Array.isArray(answers) ? answers : [answers]
+
+  server.use(
+    http.post("*/invoices/:invoiceId/payment_transaction", async ({ params, request }) => {
+      const answer = list[Math.min(requests.length, list.length - 1)] ?? {}
+
+      requests.push({
+        invoiceId: String(params.invoiceId),
+        body: (await request.json()) as PaymentTransactionRequest,
+      })
+
+      if (answer === "networkError") {
+        return HttpResponse.error()
+      } else if ("detail" in answer) {
+        return HttpResponse.json({ detail: answer.detail }, { status: answer.status })
+      } else
+        return HttpResponse.json<PaymentTransaction>({
+          transaction: FAKE_SOLANA_TRANSACTION,
+          decimals: 9,
+          amount: "500000000",
+          balance: "10000000000",
+          fee: "5000",
+          native_balance: "10000000000",
+          ...answer,
+        })
+    }),
+  )
+
+  return requests
 }

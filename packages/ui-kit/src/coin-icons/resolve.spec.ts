@@ -5,6 +5,8 @@ import { resolveCoinIcon } from "./resolve"
 const USDT_ON_ETHEREUM = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
 const USDT_ON_TRON = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 const TRON = "tron:728126428"
+const USDC_ON_SOLANA = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+const SOLANA = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
 
 describe("resolveCoinIcon", () => {
   test("finds a native coin's icon by its symbol, in any case", async () => {
@@ -45,6 +47,18 @@ describe("resolveCoinIcon", () => {
     expect(
       await resolveCoinIcon({ symbol: "usdt", contract: lowercased, network: TRON }),
     ).toBeNull()
+  })
+
+  test("finds an SPL token's icon by its base58 mint", async () => {
+    expect(
+      await resolveCoinIcon({ symbol: "anything", contract: USDC_ON_SOLANA, network: SOLANA }),
+    ).toBe(await resolveCoinIcon({ symbol: "usdc", contract: null, network: null }))
+  })
+
+  test("matches a Solana mint only in its exact case", async () => {
+    const swapped = USDC_ON_SOLANA.replace(/^E/u, "e")
+
+    expect(await resolveCoinIcon({ symbol: "usdc", contract: swapped, network: SOLANA })).toBeNull()
   })
 
   test.each([

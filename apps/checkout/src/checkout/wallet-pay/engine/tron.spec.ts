@@ -9,11 +9,13 @@ import {
 import { WalletPayError, type WalletPayFailure, type WalletTransfer } from "../types"
 import { connectTronWallet } from "./tron"
 
-const TRON = { family: "tron", chainId: 728126428 } as const
+const TRON = { family: "tron", reference: "728126428" } as const
 const MERCHANT = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf"
 const USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 
 const TRX_TRANSFER: WalletTransfer = {
+  invoiceId: "invoice",
+  methodId: "method-trx",
   network: TRON,
   to: MERCHANT,
   amount: "208.333333",
@@ -73,7 +75,7 @@ describe("connectTronWallet", () => {
 
       await (await session).ensureNetwork()
 
-      expect(fake.getChainId()).toBe(TRON.chainId)
+      expect(fake.getChainId()).toBe(728126428)
     })
 
     test("explains the network to a wallet that can't switch", async () => {

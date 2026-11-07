@@ -26,6 +26,9 @@ const BTC_ADDRESS = "bc1qpreview7h3t2kq9x8v4m6d5c0n2r7a8s3w9e4f6g"
 const LTC_ADDRESS = "ltc1qpreview4d8f2k7m3n9p5q1r6s0t8u2v4w7x3y5z"
 const ETH_ADDRESS = "0x5a3b9c2d7e1f4a6b8c0d2e4f6a8b0c2d4e6f8a0b"
 const USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+const SOL_ADDRESS = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+const SOLANA_PAY_REFERENCE = "82ZJ7nbGpixjeDCmEhUcmwXYfvurzAgGdtSMuHnUgyny"
 
 const BOLT11 =
   "lnbc432100n1pjpreviewpp5qyvz3k8m4x7r2t9c6w0e5u3a1s8d2f4g6h8j0k2l4m6n8p0q2r4s6t8vdq8w3jhxaqcqzzsxqyz5vqsp5preview"
@@ -67,6 +70,7 @@ type PreviewMethod = {
 
 const ETHEREUM = "eip155:1"
 const TRON = "tron:728126428"
+const SOLANA = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
 
 const withAmount = (base: string, amount: string) =>
   amount === "" ? base : `${base}?amount=${trimTrailingZeros(amount)}`
@@ -202,6 +206,36 @@ const extraMethod = (
 
 const evm = { scale: 6, address: ETH_ADDRESS, scheme: "ethereum" }
 
+//* A Solana Pay transfer request, as the backend builds it.
+const solanaMethod = (
+  id: string,
+  name: string,
+  symbol: string,
+  rate: string,
+  { scale, mint = "" }: { scale: number; mint?: string },
+): PreviewMethod => ({
+  payment: {
+    id: `preview-${id}`,
+    symbol,
+    currency: "sol",
+    payment_address: SOL_ADDRESS,
+    contract: mint,
+    divisibility: scale,
+  },
+
+  rate,
+  longName: name,
+  scale,
+  network: SOLANA,
+
+  uri: (amount) =>
+    `solana:${SOL_ADDRESS}?${new URLSearchParams({
+      ...(amount === "" ? {} : { amount: trimTrailingZeros(amount) }),
+      ...(mint === "" ? {} : { "spl-token": mint }),
+      reference: SOLANA_PAY_REFERENCE,
+    }).toString()}`,
+})
+
 const MANY_METHODS: PreviewMethod[] = [
   METHODS.lightning,
   METHODS.usdt,
@@ -235,6 +269,8 @@ const MANY_METHODS: PreviewMethod[] = [
   extraMethod("bnb", "BNB", "bnb", "580.00", { ...evm, scale: 8, chainId: 56 }),
   extraMethod("pol", "POL", "pol", "0.40", { ...evm, scale: 8, chainId: 137 }),
   extraMethod("trx", "TRX", "trx", "0.12", { scale: 6, network: TRON }),
+  solanaMethod("sol", "SOL", "sol", "150.00", { scale: 9 }),
+  solanaMethod("usdc-spl", "USDC (Solana)", "usdc", "1.00", { scale: 6, mint: USDC_MINT }),
   extraMethod("grs", "GRS", "grs", "0.35"),
   extraMethod("xrg", "XRG", "xrg", "0.05"),
 ]
@@ -341,7 +377,7 @@ const buildPayment = (
     wallet: method.network
       ? {
           network: method.network,
-          sender_address_required: axes.senderAddress,
+          sender_address_required: axes.senderAddress && !method.network.startsWith("solana:"),
           links: getWalletLinks(method.network),
         }
       : null,
@@ -356,7 +392,11 @@ const TRUST_WALLET_COIN_IDS: Partial<Record<string, number>> = {
   "eip155:56": 20000714,
   "eip155:137": 966,
   [TRON]: 195,
+  [SOLANA]: 501,
 }
+
+const solanaBrowseLink = (base: string) =>
+  `${base}/${encodeURIComponent(PREVIEW_CHECKOUT_URL)}?ref=${encodeURIComponent(new URL(PREVIEW_CHECKOUT_URL).origin)}`
 
 const getWalletLinks = (network: string): WalletLinkOutput[] => {
   const trustCoinId = TRUST_WALLET_COIN_IDS[network]
@@ -375,6 +415,22 @@ const getWalletLinks = (network: string): WalletLinkOutput[] => {
             id: "metamask",
             name: "MetaMask",
             url: `https://link.metamask.io/dapp/${PREVIEW_CHECKOUT_URL.replace("https://", "")}`,
+          },
+        ]
+      : []),
+
+    ...(network.startsWith("solana:")
+      ? [
+          {
+            id: "phantom",
+            name: "Phantom",
+            url: solanaBrowseLink("https://phantom.app/ul/browse"),
+          },
+
+          {
+            id: "solflare",
+            name: "Solflare",
+            url: solanaBrowseLink("https://solflare.com/ul/v1/browse"),
           },
         ]
       : []),

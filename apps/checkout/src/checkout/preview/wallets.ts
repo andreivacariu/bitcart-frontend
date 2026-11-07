@@ -1,9 +1,15 @@
+import type { PaymentTransaction } from "@bitcart/client-sdk/schemas"
 import type { CheckoutPreviewWallet } from "@bitcart/qa"
+import { SolanaSignAndSendTransaction } from "@solana/wallet-standard-features"
+import { getWallets } from "@wallet-standard/app"
+import type { IdentifierString, Wallet, WalletIcon } from "@wallet-standard/base"
+import { StandardConnect } from "@wallet-standard/features"
 
 import type { Eip1193Request, InjectedTronWeb } from "../wallet-pay/types"
 
 const EVM_ACCOUNT = "0x9F2c4E8a1B3d5f7091A2b3C4d5E6F708192a3B4c"
 const TRON_ACCOUNT = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8"
+const SOLANA_ACCOUNT = "EWmDvi3hhz86LYi2NcD6YUp18DeeB5gDkwJzde3MgF9A"
 const ANSWER_DELAY_MS = 600
 const CONFIRM_DELAY_MS = 1500
 const PLENTY = 10n ** 30n
@@ -18,8 +24,14 @@ const EVM_WRONG_CHAIN = 137
 const TRON_MAINNET = 728126428
 const TRON_NILE = 3448148188
 
-const icon = (color: string, letter: string) =>
-  `data:image/svg+xml,${encodeURIComponent(
+//* What the preview API answers a Solana wallet: an amount in base units, and balances and a fee
+//* (network fee and token account rent) in lamports.
+const SOLANA_AMOUNT = "1000000000"
+const SOLANA_FEE = "2044280"
+const PAYMENT_TRANSACTION_PATH = /\/invoices\/[^/]+\/payment_transaction$/u
+
+const icon = (color: string, letter: string): WalletIcon =>
+  `data:image/svg+xml;base64,${btoa(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="${color}"/><text x="24" y="32" font-family="sans-serif" font-size="22" font-weight="700" fill="#fff" text-anchor="middle">${letter}</text></svg>`,
   )}`
 
@@ -179,6 +191,106 @@ const createTronWallet = (scenario: CheckoutPreviewWallet) => {
   return { request, tronWeb }
 }
 
+const getSolanaFunds = (
+  scenario: CheckoutPreviewWallet,
+): Pick<PaymentTransaction, "balance" | "native_balance"> => {
+  if (scenario === "low-balance") {
+    return { balance: "0", native_balance: "0" }
+  } else if (scenario === "no-gas") {
+    return { balance: SOLANA_AMOUNT, native_balance: "0" }
+  } else return { balance: PLENTY.toString(), native_balance: PLENTY.toString() }
+}
+
+const isPaymentTransactionRequest = (input: RequestInfo | URL, init?: RequestInit) => {
+  const isRequest = input instanceof Request
+  const method = init?.method ?? (isRequest ? input.method : "GET")
+  const [path = ""] = (isRequest ? input.url : String(input)).split(/[?#]/u)
+
+  return method.toUpperCase() === "POST" && PAYMENT_TRANSACTION_PATH.test(path)
+}
+
+//* The `fetch` each installed stub replaced, so a second install never wraps the first.
+const replacedFetches = new WeakMap<typeof fetch, typeof fetch>()
+
+//* Stands in for the API, which builds the transaction a Solana wallet signs. Passes every other
+//* request to the original `fetch`, and puts it back unless something replaced the stub since.
+const stubPaymentTransactions = (scenario: CheckoutPreviewWallet): (() => void) => {
+  const original = replacedFetches.get(window.fetch) ?? window.fetch
+
+  const stubbed: typeof fetch = (input, init) => {
+    if (isPaymentTransactionRequest(input, init)) {
+      const transaction: PaymentTransaction = {
+        transaction: btoa("preview transaction"),
+        decimals: 9,
+        amount: SOLANA_AMOUNT,
+        fee: SOLANA_FEE,
+        ...getSolanaFunds(scenario),
+      }
+
+      return later(() => Response.json(transaction), 0)
+    } else return original.call(window, input, init)
+  }
+
+  replacedFetches.set(stubbed, original)
+  window.fetch = stubbed
+
+  return () => {
+    if (window.fetch === stubbed) window.fetch = original
+  }
+}
+
+const createSolanaWallet = (
+  { name, icon: walletIcon }: { name: string; icon: WalletIcon },
+  scenario: CheckoutPreviewWallet,
+): Wallet => {
+  //* `wrong-network` keeps the wallet listed, so the preview shows why its account can't pay.
+  const chains: IdentifierString[] = ["solana:mainnet", "solana:devnet"]
+
+  const account = {
+    address: SOLANA_ACCOUNT,
+    publicKey: new Uint8Array(32),
+    chains: scenario === "wrong-network" ? ["solana:devnet" as const] : chains,
+    features: [SolanaSignAndSendTransaction],
+  } as const
+
+  const confirm = () => {
+    if (scenario === "rejects") {
+      return failLater(new ProviderError(4001, "User rejected the request."), CONFIRM_DELAY_MS)
+    } else if (scenario === "fails") {
+      return failLater(new Error("Transaction simulation failed"), CONFIRM_DELAY_MS)
+    } else
+      return later(
+        () => [{ signature: crypto.getRandomValues(new Uint8Array(64)) }],
+        CONFIRM_DELAY_MS,
+      )
+  }
+
+  return {
+    version: "1.0.0",
+    name,
+    icon: walletIcon,
+    chains,
+    accounts: [],
+
+    features: {
+      [StandardConnect]: {
+        version: "1.0.0",
+
+        connect: () =>
+          scenario === "busy"
+            ? failLater(new ProviderError(-32002, "A request is already pending"))
+            : later(() => ({ accounts: [account] })),
+      },
+
+      [SolanaSignAndSendTransaction]: {
+        version: "1.0.0",
+        supportedTransactionVersions: ["legacy", 0],
+        signAndSendTransaction: confirm,
+      },
+    },
+  }
+}
+
 export const installPreviewWallets = (scenario: CheckoutPreviewWallet): (() => void) => {
   const wallets = PREVIEW_WALLETS.slice(0, scenario === "two" ? 2 : 1)
 
@@ -208,8 +320,16 @@ export const installPreviewWallets = (scenario: CheckoutPreviewWallet): (() => v
   window.addEventListener("TIP6963:requestProvider", announce)
   announce()
 
+  const unregisterSolanaWallets = getWallets().register(
+    ...wallets.map((info) => createSolanaWallet(info, scenario)),
+  )
+
+  const unstubPaymentTransactions = stubPaymentTransactions(scenario)
+
   return () => {
     window.removeEventListener("eip6963:requestProvider", announce)
     window.removeEventListener("TIP6963:requestProvider", announce)
+    unregisterSolanaWallets()
+    unstubPaymentTransactions()
   }
 }

@@ -5428,6 +5428,59 @@
         }
       }
     },
+    "/invoices/{model_id}/payment_transaction": {
+      "post": {
+        "tags": [
+          "invoices"
+        ],
+        "summary": "Create Payment Transaction",
+        "description": "Build an unsigned transaction paying the invoice from the customer's wallet\n\nSupported for Solana payment methods. The checkout asks the customer's wallet to sign and send it.\nThe transaction carries the payment's reference, so the payment is detected without a sender address.",
+        "operationId": "invoices_create_payment_transaction",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentTransactionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentTransaction"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/invoices/{model_id}/refunds": {
       "post": {
         "tags": [
@@ -12948,6 +13001,70 @@
         ],
         "title": "PaymentData"
       },
+      "PaymentTransaction": {
+        "properties": {
+          "transaction": {
+            "type": "string",
+            "title": "Transaction",
+            "description": "Unsigned base64 transaction, the paying wallet is its fee payer and only signer"
+          },
+          "decimals": {
+            "type": "integer",
+            "title": "Decimals",
+            "description": "Decimals of the payment currency"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount",
+            "description": "Base units the transaction transfers"
+          },
+          "balance": {
+            "type": "string",
+            "title": "Balance",
+            "description": "Paying wallet balance of the payment currency, in base units"
+          },
+          "fee": {
+            "type": "string",
+            "title": "Fee",
+            "description": "Native base units the paying wallet needs on top of the transfer: network fee and rent"
+          },
+          "native_balance": {
+            "type": "string",
+            "title": "Native Balance",
+            "description": "Paying wallet balance of the native currency, in base units"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transaction",
+          "decimals",
+          "amount",
+          "balance",
+          "fee",
+          "native_balance"
+        ],
+        "title": "PaymentTransaction"
+      },
+      "PaymentTransactionRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Payment method id"
+          },
+          "account": {
+            "type": "string",
+            "title": "Account",
+            "description": "Address of the paying wallet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "account"
+        ],
+        "title": "PaymentTransactionRequest"
+      },
       "PaymentWallet": {
         "properties": {
           "network": {
@@ -12962,7 +13079,8 @@
             "title": "Network",
             "examples": [
               "eip155:1",
-              "tron:728126428"
+              "tron:728126428",
+              "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
             ]
           },
           "sender_address_required": {

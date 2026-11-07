@@ -393,7 +393,7 @@ const AttemptView = ({
   const format = useAmountFormat()
   const amount = format.crypto(method.amount, method.symbol)
   const network = parseWalletNetwork(method.network)
-  const chainId = network?.chainId
+  const chainId = network?.reference
   const networkName = (network && getNetworkName(network)) ?? t`chain ${chainId}`
   const injected = useInjectedWallets(network).find(({ id }) => id === wallet.id)
 
@@ -534,6 +534,13 @@ const AttemptView = ({
             <p>{t`Switch ${name} to ${networkName}, then try again.`}</p>,
           )
 
+        case "unsupportedNetwork":
+          return outcome(
+            t`${walletTitle} can't pay on ${networkName}`,
+            <p>{t`Pay with another wallet, or another way.`}</p>,
+            null,
+          )
+
         case "insufficientAmount": {
           const symbol = method.symbol.toUpperCase()
           const balance = format.crypto(failure.balance, method.symbol)
@@ -560,6 +567,16 @@ const AttemptView = ({
 
             <>
               <p>{t`${walletTitle} returned an error.`}</p>
+              {failure.message && <p className="text-xs break-words">{failure.message}</p>}
+            </>,
+          )
+
+        case "storeError":
+          return outcome(
+            t`The store couldn't prepare this payment`,
+
+            <>
+              <p>{t`Nothing was sent from ${name}. Try again in a moment.`}</p>
               {failure.message && <p className="text-xs break-words">{failure.message}</p>}
             </>,
           )

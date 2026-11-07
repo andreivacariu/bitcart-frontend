@@ -151,15 +151,12 @@ describe("buildPreviewScenario", () => {
     ])
   })
 
-  test("asks EVM and TRON methods for a sender address on request", () => {
+  test("asks EVM and TRON methods for a sender address on request, never Solana ones", () => {
+    const payments = (senderAddress: boolean) =>
+      buildPreviewScenario({ status: "new", manyMethods: true, senderAddress }).invoice.payments
+
     const wallets = (senderAddress: boolean) =>
-      Object.fromEntries(
-        buildPreviewScenario({
-          status: "new",
-          manyMethods: true,
-          senderAddress,
-        }).invoice.payments.map(({ id, wallet }) => [id, wallet]),
-      )
+      Object.fromEntries(payments(senderAddress).map(({ id, wallet }) => [id, wallet]))
 
     expect(wallets(true)).toMatchObject({
       "preview-btc": null,
@@ -168,10 +165,21 @@ describe("buildPreviewScenario", () => {
       "preview-trx": { network: "tron:728126428", sender_address_required: true },
     })
 
+    const solana = payments(true).filter(({ wallet }) => wallet?.network?.startsWith("solana:"))
+
+    expect(solana.map(({ id }) => id)).toStrictEqual(["preview-sol", "preview-usdc-spl"])
+
+    for (const { wallet } of solana) {
+      expect(wallet).toMatchObject({
+        network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+        sender_address_required: false,
+      })
+    }
+
     expect(wallets(false)["preview-eth"]).toMatchObject({ sender_address_required: false })
   })
 
-  test("offers the backend's wallet app links on EVM and TRON methods", () => {
+  test("offers the backend's wallet app links on EVM, TRON and Solana methods", () => {
     const links = Object.fromEntries(
       buildPreviewScenario({ status: "new", manyMethods: true }).invoice.payments.map(
         ({ id, wallet }) => [id, wallet?.links.map((link) => link.id) ?? null],
@@ -183,6 +191,54 @@ describe("buildPreviewScenario", () => {
       "preview-eth": ["metamask", "trust"],
       "preview-usdc-polygon": ["metamask", "trust"],
       "preview-trx": ["trust", "tronlink"],
+      "preview-sol": ["phantom", "solflare", "trust"],
+      "preview-usdc-spl": ["phantom", "solflare", "trust"],
+    })
+  })
+
+  test("links Solana wallet apps to the checkout like the backend", () => {
+    const { invoice } = buildPreviewScenario({ status: "new", manyMethods: true })
+    const sol = invoice.payments.find(({ id }) => id === "preview-sol")
+
+    expect(sol?.wallet?.links).toStrictEqual([
+      {
+        id: "phantom",
+        name: "Phantom",
+        url: "https://phantom.app/ul/browse/https%3A%2F%2Fcheckout.example.com%2Fi%2Fpreview-invoice?ref=https%3A%2F%2Fcheckout.example.com",
+      },
+      {
+        id: "solflare",
+        name: "Solflare",
+        url: "https://solflare.com/ul/v1/browse/https%3A%2F%2Fcheckout.example.com%2Fi%2Fpreview-invoice?ref=https%3A%2F%2Fcheckout.example.com",
+      },
+      {
+        id: "trust",
+        name: "Trust Wallet",
+        url: "https://link.trustwallet.com/open_url?coin_id=501&url=https%3A%2F%2Fcheckout.example.com%2Fi%2Fpreview-invoice",
+      },
+    ])
+  })
+
+  test("asks for SOL and USDC on Solana with Solana Pay transfer requests", () => {
+    const { invoice } = buildPreviewScenario({ status: "new", manyMethods: true })
+    const payment = (id: string) => invoice.payments.find((candidate) => candidate.id === id)
+
+    expect(payment("preview-sol")).toMatchObject({
+      currency: "sol",
+      contract: "",
+      divisibility: 9,
+      payment_url: expect.stringMatching(
+        /^solana:7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU\?amount=[\d.]+&reference=\w+$/u,
+      ),
+    })
+
+    expect(payment("preview-usdc-spl")).toMatchObject({
+      currency: "sol",
+      contract: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      divisibility: 6,
+      payment_url: expect.stringMatching(
+        /\?amount=25&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=\w+$/u,
+      ),
     })
   })
 
